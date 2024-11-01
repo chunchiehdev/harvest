@@ -26,24 +26,11 @@ def crawl(driver, url, username, password, threshold, ite):
 
         print("Login successful. Starting to scrape data...")
 
-        if not cf.scroll_and_click_button(driver):
-            print("Failed to scroll and click button.")
-            return None
+        # if not cf.scroll_and_click_button(driver):
+        #     print("Failed to scroll and click button.")
+        #     return None
 
-        links_info = cf.get_filtered_links_with_info(driver)
-
-        if links_info:
-            print(f"\nFound {len(links_info)} relevant links:")
-            for info in links_info:
-                print(f"\nURL: {info['url']}")
-                print(f"Text: {info['text']}")
-                print(f"Parent element: {info['parent_element']}")
-                print(f"Classes: {info['classes']}")
-                print(f"ID: {info['id']}")
-            return links_info
-        else:
-            print("No relevant links found.")
-            return []
+        cf.get_filtered_links_with_info_profile_comment(driver)
         
     except Exception as e:
         print(f"Error occurred: {str(e)}")
@@ -64,9 +51,7 @@ if __name__ == '__main__':
     # starter = 0
     # limit = 10
 
-    A = crawl(driver, url, username, password, threshold, ite)
+    crawl(driver, url, username, password, threshold, ite)
   
-    print("A", A)
-
     time.sleep(30)
     driver.quit()

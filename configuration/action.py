@@ -10,6 +10,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 import re
 from urllib.parse import urlparse
+from pprint import pprint
 
 import time
 
@@ -231,7 +232,7 @@ def get_url():
     '''Get the URL of a Facebook post from the user input'''
     #get url from input
     # url = input("Enter the URL: ")
-    url = "https://mbasic.facebook.com/groups/1740036226559286/"
+    url = "https://mbasic.facebook.com/groups/189797110788318/permalink/246400928461269/?rdid=BBmI8i684TUenNTT&share_url=https%3A%2F%2Fmbasic.facebook.com%2Fshare%2Fp%2FEQzShvUwvpDxmcsc%2F&_rdr"
     return url
 
 
@@ -250,6 +251,7 @@ def get_filtered_links_with_info(driver):
     pattern = r'https://mbasic\.facebook\.com/groups/.*'
     
     for element in soup.find_all('a', href=True):
+        print("\nelement\n",element)
         href = element['href']
         if href.startswith('/'):
             href = f"https://mbasic.facebook.com{href}"
@@ -274,4 +276,111 @@ def get_filtered_links_with_info(driver):
             unique_links_info.append(item)
     
     return unique_links_info
+
+def get_comments_by_id(soup):
+
+    comments = soup.find_all('div', id=lambda x: x and x.isdigit())
+    if not comments:
+        print("No comments found. HTML content:", soup.prettify()[:500])  # 印出部分HTML以便偵錯
+        return []
+    results = []
+
+    for comment in comments:
+        author = comment.find('h3').find('a').text if comment.find('h3') else "Unknown Author"
+        content_div = comment.find('div', {'class': lambda x: x and (len(x) == 2 or len(x) == 3)})
+        if content_div:        
+            content = content_div.text
+            results.append({"author": author, "content": content})
+            print(f"Author: {author}, Content: {content}")
+
+    return results
+
+def get_filtered_links_with_info_profile_comment(driver, timeout=10):
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda d: d.execute_script("return document.readyState") == "complete", message='website does not ready.'
+        )
+        time.sleep(2)  
+
+        html_content = driver.page_source
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        get_comments_by_id(soup)
+    except TimeoutException:
+        print("Timeout waiting for comments to load")
+        return []
+    except Exception as e:
+        print(f"Error getting comments: {str(e)}")
+        return []
+    # # # 抓取 m_story_permalink_view 內的主要內容
+    # story_div = soup.find('div', id="m_story_permalink_view")
+
+    # if story_div:
+    #         # 你可以進一步處理找到的內容
+    #         # 例如：提取文字內容
+    #         text_content = story_div.find('div', class_="bv").get_text()
+    #         # 提取作者資訊
+    #         author = story_div.find('h3', class_="br bs bt bu").get_text()
+            
+    #         print("Content:", text_content)
+    #         print("Author:", author)
+    # else:
+    #     print("找不到目標元素")
+    # # 定義一個空的字典來存放提取的資訊
+    # story_info = {}
+
+    # # 提取發佈者名稱
+    # user_name_tag = story_div.find('a', href=True)
+    # story_info['user_name'] = user_name_tag.get_text(strip=True) if user_name_tag else "N/A"
+
+    # # 提取發佈內容
+    # content_tag = story_div.find('div', class_='bv')
+    # story_info['content'] = content_tag.get_text(strip=True) if content_tag else "N/A"
+
+    # # 提取發佈時間
+    # time_tag = story_div.find('abbr')
+    # story_info['time'] = time_tag.get_text(strip=True) if time_tag else "N/A"
+
+    # # 提取社團名稱或頁面標題
+    # group_tag = story_div.find('h3', class_='br')
+    # story_info['group_name'] = group_tag.get_text(strip=True) if group_tag else "N/A"
+
+    # # 提取讚數
+    # likes_tag = story_div.find('div', class_='db')
+    # story_info['likes'] = likes_tag.get_text(strip=True) if likes_tag else "N/A"
+
+    # # 提取留言
+    # comments = []
+    # for comment_div in story_div.find_all('div', class_='dd'):
+    #     comment_data = {}
+    #     # 抓取留言者名稱
+    #     commenter_tag = comment_div.find('a', href=True)
+    #     comment_data['commenter'] = commenter_tag.get_text(strip=True) if commenter_tag else "N/A"
+        
+    #     # 抓取留言內容
+    #     comment_content_tag = comment_div.find('div', class_='dx')
+    #     comment_data['comment'] = comment_content_tag.get_text(strip=True) if comment_content_tag else "N/A"
+        
+    #     # 抓取留言時間
+    #     comment_time_tag = comment_div.find('abbr')
+    #     comment_data['comment_time'] = comment_time_tag.get_text(strip=True) if comment_time_tag else "N/A"
+        
+    #     comments.append(comment_data)
+
+    # story_info['comments'] = comments
+
+    # # 顯示提取的資訊
+    # print("發佈者:", story_info['user_name'])
+    # print("內容:", story_info['content'])
+    # print("發佈時間:", story_info['time'])
+    # print("社團或頁面名稱:", story_info['group_name'])
+    # print("讚數:", story_info['likes'])
+    # print("\n留言:")
+    # for comment in story_info['comments']:
+    #     print("留言者:", comment['commenter'])
+    #     print("留言內容:", comment['comment'])
+    #     print("留言時間:", comment['comment_time'])
+    #     print("-----------")
+
 
