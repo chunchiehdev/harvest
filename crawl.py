@@ -1,13 +1,10 @@
 import configuration as cf
-import pandas as pd
-import numpy as np
-import json
-import os
-import os 
 from selenium.webdriver.common.by import By
+from bs4 import BeautifulSoup
+import os
 from dotenv import load_dotenv
 import time
-from io import StringIO
+import json
 
 load_dotenv()
 fb_user = os.getenv('user')
@@ -26,12 +23,15 @@ def crawl(driver, url, username, password, threshold, ite):
 
         print("Login successful. Starting to scrape data...")
 
-        # if not cf.scroll_and_click_button(driver):
-        #     print("Failed to scroll and click button.")
-        #     return None
-
-        cf.get_filtered_links_with_info_profile_comment(driver)
-        
+        get_all_links = cf.get_all_posts_links(driver)
+        print()
+        print(get_all_links)
+        print()
+        print(f"總共收集到 {len(get_all_links)} 個連結")
+                
+        with open('post_links.json', 'w', encoding='utf-8') as f:
+            json.dump(get_all_links, f, ensure_ascii=False, indent=4)
+            
     except Exception as e:
         print(f"Error occurred: {str(e)}")
         return []

@@ -5,9 +5,15 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-
 import time
 import random
+import os
+from dotenv import load_dotenv
+
+
+load_dotenv()
+path_mac = os.getenv('driver_path_mac')
+path_windows = os.getenv('driver_path_win')
 
 def type_like_human(element, text):
     for char in text:
@@ -21,6 +27,7 @@ def login_facebook(username, password, driver):
         username_field = WebDriverWait(driver, 10).until(
             EC.visibility_of_element_located((By.NAME, "email"))
         )
+        print("username_field", username_field)
         type_like_human(username_field, username)  # Simulate human typing of the username
 
         password_field = WebDriverWait(driver, 10).until(
@@ -41,7 +48,7 @@ def configure_driver():
     '''Configure the webdriver'''
 
     #Configurations
-    webdriver_path = "C:\\Users\\wulab\\Downloads\\chromedriver-win64\\chromedriver-win64\\chromedriver.exe" #your webdriver path (chromedriver.exe)
+    webdriver_path = path_mac 
     chrome_options = Options()
 
     # Turn off Chrome notification and set language to English
