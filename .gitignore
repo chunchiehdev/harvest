@@ -9,3 +9,5 @@ chromedriver.exe
 *.pyc
 
 testing.py
+
+all_posts_comments_progress.json

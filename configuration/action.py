@@ -1,277 +1,43 @@
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException, ElementClickInterceptedException
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
 from bs4 import BeautifulSoup
-import re
-
+import json
+from datetime import datetime
 import time
 
-def scroll_and_click_button(driver, max_attempts=3, scroll_amount=1000, timeout=10):
-    '''
-    Scroll down and click the "All comments | Most relevant" button
-    
-    Parameters:
-    - driver: WebDriver instance
-    - max_attempts: Maximum number of scroll attempts
-    - scroll_amount: Pixels to scroll each time
-    - timeout: Maximum wait time for button in seconds
-    '''
-    
-    BUTTON_SELECTOR = "div.x9f619.x1n2onr6.x1ja2u2z.x6s0dn4.x3nfvp2.xxymvpz"
-    
-    for attempt in range(max_attempts):
-        try:
-            print(f"Attempt {attempt + 1}: Looking for comments button...")
-            
-            # Try to find and click the button
-            button = WebDriverWait(driver, timeout).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, BUTTON_SELECTOR))
-            )
-            button.click()
-            print("Successfully clicked comments button")
-            return True
-            
-        except TimeoutException:
-            print(f"Button not found on attempt {attempt + 1}, scrolling down...")
-            driver.execute_script(f"window.scrollBy(0, {scroll_amount});")
-            
-            # If this was the last attempt, raise the exception
-            if attempt == max_attempts - 1:
-                print("Failed to find button after maximum attempts")
-                return False
-                
-        except ElementClickInterceptedException:
-            print("Button found but couldn't be clicked, trying to scroll into better position...")
-            # Try to scroll element into better position
-            driver.execute_script("arguments[0].scrollIntoView(true);", button)
-            
-        except Exception as e:
-            print(f"Unexpected error: {str(e)}")
-            return False
-
-    return False
-def click_view_more_btn(driver):
-    '''Click the view more button to change the show style of comments of a post'''
-
-    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-    # Find the view more button
-    view_more_btn = WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'more comments')]")))
-    view_more_btn.click()
-    print("View more button clicked successfully.")
-    return None
-
-def click_showed_type_btn(driver, btn_name):
-    '''Click the button to show the most relevant comments or all comments under a post by the argument btn_name'''
-
-    try:
-        # Scroll down to the button and click
-        driver.execute_script("window.scrollTo(0, window.scrollY)")  # Scroll to the top
-
-        # Find the button by its text
-        most_relevant_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), '%s')]"%(btn_name))))
-        most_relevant_button.click()
-    except Exception as e:
-        print("Can not click", btn_name)
-        return False
-
-def show_more_comments1(driver, time = 50):
-    while True:
-        try:
-            click_view_more_btn(driver)
-            time -= 1
-            if time < 0:
-                break
-        except Exception as e:
-            print("Out of contents")
-            break
-
-def show_more_comments(driver):
-    '''Show more comments under a post'''
-
-    # Limit the number of attempts to load more comments
-    max_attempts = 10  # Adjust based on typical post length and your needs
-    attempts = 0
-    last_count = 0
-    stable_attempts = 3  # Number of attempts with no new comments before considering end
-
-    # Keep trying to load more comments until the limit is reached
-    while attempts < max_attempts:
-        try:
-            click_view_more_btn(driver)
-            time.sleep(2)  # Give some time for comments to load
-            current_count = len(driver.find_elements(By.XPATH, "//div[contains(@class, 'x1n2onr6 x46jau6')]"))
-
-            if current_count == last_count:
-                stable_attempts -= 1
-                if stable_attempts == 0:
-                    print("No more comments to load.")
-                    break
-            else:
-                last_count = current_count
-                stable_attempts = 3  # Reset the stable_attempts counter
-
-            attempts += 1
-        except Exception as e:
-            print("All comments loaded.")
-            break
-
-def show_all_replies(driver, threshold, ite):
-    '''Show all replies of comments under a post
-    Limited time: start - end = 3s => If there is no comment shown in 3s, stop
-    Threshold: maximum number of comments'''
-    arr = []
-    cnt = 1
-    while True:
-        start = time.time() 
-        if cnt > threshold: #Threshold
-            break
-        try:
-            # Find replied comments
-            all_replied_comments = driver.find_elements(By.XPATH, "//div[contains(@class, 'x1n2onr6 x46jau6')]")
-        except:
-            break
-        
-        # save count of comments to check if all comments are shown
-        arr.append(len(all_replied_comments))
-        if arr.count(max(arr)) >= ite:
-            print("All replies are shown")
-            return
-        
-        # Try to show sub-replied comments in replied-comments
-        for comment in all_replied_comments:
-
-            driver.execute_script("window.scrollBy(0, -50);")  # Scroll down 50px to load more comments
-        
-            try:
-                view_more_buttons = WebDriverWait(comment, 10).until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'html-div xe8uvvx xdj266r x11i5rnm xat24cr x1mh8g0r xexx8yu x4uap5 x18d9i69 xkhd6sd x78zum5 x1iyjqo2 x21xpn4 x1n2onr6')]")))
-                view_more_buttons.click()
-                sub_cmt = comment.find_elements(By.XPATH, "//div[contains(@class, 'x1n2onr6 x1swvt13 x1iorvi4 x78zum5 x1q0g3np x1a2a7pz')]")
-                for sub_cmt in comment:
-                    try:
-                        view_more_sub_buttons = WebDriverWait(sub_cmt, 10).until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'html-div xe8uvvx xdj266r x11i5rnm xat24cr x1mh8g0r xexx8yu x4uap5 x18d9i69 xkhd6sd x78zum5 x1iyjqo2 x21xpn4 x1n2onr6')]")))
-                        view_more_sub_buttons.click()
-                        #cnt += 1
-                    except:
-                        break
-
-                cnt += 1
-
-            except Exception as e:
-                break
-
-            finally:
-                end = time.time()
-                if end - start > 3:
-                    #print("Finally")
-                    return
-
-def filter_spam(text):
-    '''Filter spam comments based on user-defined keywords'''
-
-    spam_text = ['http', 'miễn phí', '100%', 'kèo bóng', 'khóa học', 'netflix', 'Net Flix', 'shopee', 'lazada']
-    for spam in spam_text:
-        if spam in text.lower():
-            return True
-    return False
-
-def get_comments(driver, limit_text=2500):
-    '''Get comments under a post and filter spam comments
-    Return:  - dataframe of comments: id, text, is_spam, tag_name.
-             - number of comments'''
-    cnt = 0
-    treasured_comments = []
-    is_spam = 0
-    comments = driver.find_elements(By.XPATH, "//div[contains(@class, 'x1n2onr6 x1swvt13 x1iorvi4 x78zum5 x1q0g3np x1a2a7pz') or contains(@class, 'x1n2onr6 xurb0ha x1iorvi4 x78zum5 x1q0g3np x1a2a7pz')]")
-    for comment in comments:
-        try:
-            # Check if comment contains text
-            text_ele = comment.find_element(By.XPATH, ".//div[contains(@class, 'xdj266r x11i5rnm xat24cr x1mh8g0r x1vvkbs')]")
-            username = comment.find_element(By.XPATH, ".//span[@class='x3nfvp2']/span")
-
-            if text_ele:
-                try:
-                    name_tag = text_ele.find_element(By.XPATH, ".//span[@class='xt0psk2']/span")
-                    name_tag = name_tag.text
-                except:
-                    name_tag = None
-
-                # Limit the number of comments  
-                cnt += 1
-                if cnt > limit_text:
-                    break
-                text = text_ele.text
-                if cnt % 10 == 0:
-                    print("Count: ", cnt)
-
-                # Filter spam comments    
-                if filter_spam(text):
-                    is_spam = 1
-                else:
-                    is_spam = 0
-                treasured_comments.append({
-                    "id" : cnt,
-                    "username": username.text,
-                    "text": text,
-                    'tag_name': name_tag,
-                    'is_spam': is_spam
-                })
-        except Exception as e:
-            continue
-    print("Crawl successfully!!! \nTotal Comments: ", cnt)
-    return treasured_comments, cnt
 
 def get_url():
     '''Get the URL of a Facebook post from the user input'''
-    #get url from input
+    # get url from input
     # url = input("Enter the URL: ")
     url = "https://mbasic.facebook.com/groups/189797110788318/"
     return url
-
 
 def save_to_csv(df, file_name):
     '''Save the dataframe to a CSV file'''
     df.to_csv(file_name, index=False)
 
-def get_filtered_links_with_info(driver):
-    '''
-    get match data
-    '''
-    page_source = driver.page_source
-    soup = BeautifulSoup(page_source, 'html.parser')
+def convert_to_timestamp(time_str):
+
+    is_pm = '下午' in time_str
+
+    time_str = time_str.replace('上午', '').replace('下午', '')
+
+    dt = datetime.strptime(time_str, "%Y年%m月%d日%I:%M")
     
-    links_info = []
-    pattern = r'https://mbasic\.facebook\.com/groups/.*'
-    
-    for element in soup.find_all('a', href=True):
-        href = element['href']
-        if href.startswith('/'):
-            href = f"https://mbasic.facebook.com{href}"
-            
-        if re.match(pattern, href):
-            # create dic
-            link_data = {
-                'url': href,
-                'text': element.get_text(strip=True),  # text
-                'parent_element': str(element.parent.name),  # father
-                'classes': element.get('class', []),  # CSS 
-                'id': element.get('id', '')  # elementID
-            }
-            links_info.append(link_data)
-    
-    # remove duplicate
-    seen_urls = set()
-    unique_links_info = []
-    for item in links_info:
-        if item['url'] not in seen_urls:
-            seen_urls.add(item['url'])
-            unique_links_info.append(item)
-    
-    return unique_links_info
+    hour = dt.hour
+    if is_pm and hour != 12:
+        hour += 12
+    elif not is_pm and hour == 12:
+        hour = 0
+
+    dt = dt.replace(hour=hour)
+
+    timestamp = int(time.mktime(dt.timetuple()))
+    return timestamp
 
 def get_comments_by_id(soup):
 
@@ -279,65 +45,167 @@ def get_comments_by_id(soup):
     
     if not comments:
         print("No comments found. HTML content:", soup.prettify()[:500])  # 印出部分HTML以便偵錯
-        return []
+        return [], []
     
     results = []
+    comment_ids = []  # 新增一個用來儲存 ID 的列表
+
 
     for comment in comments:
+        comment_id = comment.get('id')  # 獲取每個評論的唯一ID
+        if comment_id:
+            comment_ids.append(comment_id)
         author = comment.find('h3').find('a').text if comment.find('h3') else "Unknown Author"
         content_div = comment.find('div', {'class': lambda x: x and (len(x) == 2 or len(x) == 3)})
+        
         if content_div:        
             content = content_div.text
             results.append({"author": author, "content": content})
-            
-    return results
 
-def load_all_comments(driver, timeout=10):
+    return results, comment_ids
+
+def load_all_comments(driver, timeout=10, max_retries=3):
     all_comments = []
+    seen_ids = set()  # 使用集合來存儲已處理過的留言內容
+
 
     while True:
+        # 確保頁面完全載入
+        WebDriverWait(driver, timeout).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
         
+        # 獲取當前頁面的留言
         html_content = driver.page_source
         soup = BeautifulSoup(html_content, 'html.parser')
-        comments = get_comments_by_id(soup)
-        all_comments.extend(comments)
-        
-        try:
+        comments, comment_ids = get_comments_by_id(soup)
 
-            element = WebDriverWait(driver, timeout).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "div[id^='see_next_'] a"))
-            )
-            element.click()
-            print("點擊查看更多留言...")            
+        for comment, comment_id in zip(comments, comment_ids):
+            if comment_id and comment_id not in seen_ids:  # 檢查ID是否已處理
+                all_comments.append(comment)
+                seen_ids.add(comment_id)
 
-            time.sleep(2)
-            
-        except TimeoutException:
-            print("沒有更多的『查看更多留言』按鈕，留言加載完成。")
+        retries = 0
+        while retries < max_retries:
+            try:
+
+                # 等待"查看更多留言"按鈕出現
+                see_more_div = WebDriverWait(driver, timeout).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div[id^='see_next_']"))
+                )
+                
+                see_more_link = see_more_div.find_element(By.TAG_NAME, 'a').get_attribute("href")
+                
+                driver.get(see_more_link)
+
+                time.sleep(2)
+                print("click and look for more comment...")
+                
+                # 驗證新內容已載入
+
+                new_html = driver.page_source
+                new_soup = BeautifulSoup(new_html, 'html.parser')
+                new_comments, new_comment_ids = get_comments_by_id(new_soup)
+                if not new_comments:
+                    print("No new comments loaded.")
+                    break
+
+                for comment, comment_id in zip(new_comments, new_comment_ids):
+                    if comment_id and comment_id not in seen_ids:  # 檢查ID是否已處理
+                        all_comments.append(comment)
+                        seen_ids.add(comment_id)
+
+                break
+                
+                
+            except StaleElementReferenceException:
+                retries += 1
+                print("The element has expired. Retrying... ({retries}/{max_retries})")
+                time.sleep(2) 
+                
+            except TimeoutException:
+                print("Can not find more comment button")
+                return all_comments
+                
+            except Exception as e:
+                print(f"Click error: {str(e)}")
+                retries += 1
+                time.sleep(2)
+                
+        if retries >= max_retries:
+            print(f"Max retrues. ({max_retries}), Stop load")
             break
-        except Exception as e:
-            print(f"發生錯誤: {str(e)}")
+
+        # 確認是否還有更多留言按鈕
+        try:
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div[id^='see_next_'] a"))
+            )
+        except TimeoutException:
+            print("No more button.")
             break
 
     return all_comments
-
 def get_filtered_links_with_info_profile_comment(driver, timeout=10):
     try:
         WebDriverWait(driver, timeout).until(
-            lambda d: d.execute_script("return document.readyState") == "complete", message='website does not ready.'
+            lambda d: d.execute_script(
+                "return document.readyState === 'complete' && !!document.querySelector('div[id]')"
+            )
         )
-        time.sleep(2)  
- 
-        all_comments = load_all_comments(driver, timeout)
+        time.sleep(0.5)  
 
-        return all_comments  # 返回所有留言的清單
+        article_author = None
+        article_content = ""
 
-    except TimeoutException:
-        print("Timeout waiting for comments to load")
-        return []
+        container = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "m_story_permalink_view"))
+            )
+
+        try:
+            author_element = container.find_element(By.XPATH, ".//header//h3//a | .//header//h3/strong/a")
+            print()
+            print(f"Author Element Preview: {author_element.text[:10]}...")
+            print()
+            article_author = author_element.text if author_element else "Unknown"
+            
+            print("article_author", article_author)
+
+        except Exception as e:
+            print(f"Error extracting article author: {str(e)}")
+        
+        try:
+            
+            content_elements = container.find_elements(
+                By.XPATH, ".//header/following-sibling::*//div | .//header/following-sibling::*//p"
+            )
+            for element in content_elements:
+                
+                if element.text.strip():
+                    article_content += element.text.strip() + "\n"
+            
+        except Exception as e:
+            print(f"Error extracting article content: {str(e)}")
+        
+        post_time = None
+        try:
+            post_time = container.find_element(By.XPATH, ".//footer//abbr").text
+        except Exception as e:
+            print(f"Error extracting post time: {str(e)}")
+
+        comments = load_all_comments(driver, timeout)
+
+        return {
+            "author": article_author,
+            "content": article_content.strip(),
+            "post_time": post_time,
+            "comments": comments
+        }
+
     except Exception as e:
         print(f"Error getting comments: {str(e)}")
-        return []
+        return {"author": None, "content": None, "comments": []}
+
 
 def get_all_posts_links(driver):
     
@@ -345,22 +213,34 @@ def get_all_posts_links(driver):
     
     def get_current_page_links():
         try:
-            stories_container = driver.find_element(By.ID, "m_group_stories_container")
-            posts = stories_container.find_elements(By.TAG_NAME, 'article')
+            stories_container = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "m_group_stories_container"))
+            )
+            posts = WebDriverWait(stories_container, 10).until(
+                EC.presence_of_all_elements_located((By.TAG_NAME, 'article'))
+            )
             
             for post in posts:
                 try:
-                    time_str = post.find_element(By.XPATH, ".//footer/div[1]//abbr").text.strip()
-                    link = post.find_element(By.XPATH, ".//footer/div[2]//a").get_attribute('href')
-                    
-                    all_links[time_str] = link  # Store link with timestamp as key
+                    time_str = WebDriverWait(post, 5).until(
+                        EC.presence_of_element_located((By.XPATH, ".//footer/div[1]//abbr"))
+                    ).text.strip()
+
+                    link = WebDriverWait(post, 5).until(
+                        EC.presence_of_element_located((By.XPATH, ".//footer/div[2]//a"))
+                    ).get_attribute('href')
+
+                    timestamp = convert_to_timestamp(time_str)
+
+                    all_links[timestamp] = link  # Store link with timestamp as key
 
                 except Exception as e:
-                    print(f"無法獲取文章連結: {e}")
+                    print(f"Error getting link: {e}")
 
             return stories_container
+        
         except Exception as e:
-            print(f"無法找到 stories container: {e}")
+            print(f"Error finding container: {e}")
             return None
     
     def find_next_page_link(container):
@@ -368,7 +248,7 @@ def get_all_posts_links(driver):
         next_page_exists = container.find_elements(By.XPATH, "./div[1]/a[1]")
 
         if not next_page_exists:
-            print("已到達最後一頁")
+            
             return None
         try:
             next_page = WebDriverWait(container, 10).until(
@@ -377,33 +257,61 @@ def get_all_posts_links(driver):
 
             return next_page.get_attribute("href")
         except Exception as e:
-            print(f"無法獲取下一頁連結: {e}")
+            
             return None
     
-    while True:
+    def save_progress():
+        with open('links_progress.json', 'w', encoding='utf-8') as f:
+            json.dump(all_links, f, ensure_ascii=False, indent=4)
 
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.ID, "m_group_stories_container"))
-        )
-        
-        container = get_current_page_links()
-        if not container:
-            break
-            
-        next_link = find_next_page_link(container)
-        if not next_link:
-            break
-            
-        print(f"目前已收集 {len(all_links)} 個連結")
-        print(f"準備進入下一頁: {next_link}")
-        
+    retry_count = 0
+    max_retries = 3
+    
+    while True:
         try:
+
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "m_group_stories_container"))
+            )
+            
+            container = get_current_page_links()
+
+            if not container:
+                    if retry_count < max_retries:
+                        retry_count += 1
+                        print(f" Retry {retry_count} ...")
+                        time.sleep(2)
+                        continue
+                    break
+            
+            retry_count = 0  
+
+            if len(all_links) % 10 == 0:
+                save_progress()
+            
+            next_link = find_next_page_link(container)
+            if not next_link:
+                break
+                
+            print(f"Have collected {len(all_links)} links so far")
+            
             driver.get(next_link)
-        
-            time.sleep(2)
+
+            WebDriverWait(driver, 10).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            
         except Exception as e:
-            print(f"無法進入下一頁: {e}")
+            print(f"Process error: {e}")
+            if retry_count < max_retries:
+                retry_count += 1
+                print(f"Retry {retry_count} ...")
+                time.sleep(2)
+                continue
             break
+    
+    save_progress()
+    print(f"Total collect {len(all_links)} links")
     
     return all_links
     
