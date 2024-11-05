@@ -47,7 +47,7 @@ def configure_driver():
     '''Configure the webdriver'''
 
     # Configurations
-    webdriver_path = path_mac 
+    webdriver_path = path_windows 
     chrome_options = Options()
 
     # Turn off Chrome notification and set language to English
