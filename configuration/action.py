@@ -16,10 +16,6 @@ def get_url():
     url = "https://mbasic.facebook.com/groups/189797110788318/"
     return url
 
-def save_to_csv(df, file_name):
-    '''Save the dataframe to a CSV file'''
-    df.to_csv(file_name, index=False)
-
 def convert_to_timestamp(time_str):
 
     is_pm = '下午' in time_str
@@ -44,7 +40,7 @@ def get_comments_by_id(soup):
     comments = soup.find_all('div', id=lambda x: x and x.isdigit())
     
     if not comments:
-        print("No comments found. HTML content:", soup.prettify()[:500])  # 印出部分HTML以便偵錯
+        print("No comments found. HTML content:")  # 印出部分HTML以便偵錯
         return [], []
     
     results = []
@@ -164,9 +160,6 @@ def get_filtered_links_with_info_profile_comment(driver, timeout=10):
 
         try:
             author_element = container.find_element(By.XPATH, ".//header//h3//a | .//header//h3/strong/a")
-            print()
-            print(f"Author Element Preview: {author_element.text[:10]}...")
-            print()
             article_author = author_element.text if author_element else "Unknown"
             
             print("article_author", article_author)
@@ -314,4 +307,94 @@ def get_all_posts_links(driver):
     print(f"Total collect {len(all_links)} links")
     
     return all_links
-    
+
+def wait_for_page_load(driver, timeout=10):
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda d: d.execute_script(
+                "return document.readyState === 'complete' && !!document.querySelector('div[id]')"
+            )
+        )
+        time.sleep(0.5) 
+    except Exception as e:
+        print(f"Error waiting for page load: {str(e)}")
+        raise
+
+def extract_article_author(container):
+    try:
+        author_element = container.find_element(By.XPATH, ".//header//h3//a | .//header//h3/strong/a")
+        author = author_element.text if author_element else "Unknown"
+        
+        return author
+    except Exception as e:
+        print(f"Error extracting article author: {str(e)}")
+        return "Unknown"
+
+def extract_article_content(container):
+    content = ""
+    try:
+        content_elements = container.find_elements(By.XPATH, ".//header/following-sibling::*//div | .//header/following-sibling::*//p")
+        for element in content_elements:
+            if element.text.strip():
+                content += element.text.strip() + "\n"
+        return content.strip()
+    except Exception as e:
+        print(f"Error extracting article content: {str(e)}")
+        return ""
+
+def extract_post_time(container):
+    try:
+        return container.find_element(By.XPATH, ".//footer//abbr").text
+    except Exception as e:
+        print(f"Error extracting post time: {str(e)}")
+        return None
+
+def extract_file_links(container):
+    file_links=[]
+
+    try:
+        file_elements = container.find_elements(By.XPATH, ".//div[@data-ft='{\"tn\":\"H\"}']//a")
+
+        for file_element in file_elements:
+            link = file_element.get_attribute("href")
+            
+            try:
+                file_name = file_element.find_element(By.XPATH, ".//h3").text
+            except Exception:
+                file_name = "Unnamed File" 
+
+            file_links.append({"file_name": file_name, "link": link})
+        if not file_links:
+            print("No file links found in the article.")
+
+    except Exception as e:
+        print(f"Error extracting file links: {str(e)}")
+
+    return file_links
+
+def get_article_data(driver, timeout=10):
+    try:
+        wait_for_page_load(driver, timeout)
+        
+        container = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.ID, "m_story_permalink_view"))
+        )
+
+        author = extract_article_author(container)
+        content = extract_article_content(container)
+        post_time = extract_post_time(container)
+        file_links = extract_file_links(container)
+        comments = load_all_comments(driver, timeout)
+
+        return {
+            "author": author,
+            "content": content,
+            "post_time": post_time,
+            "file_links": file_links,
+            "comments": comments
+        }
+
+    except Exception as e:
+        print(f"Error getting article data: {str(e)}")
+        return {"author": None, "content": None, "post_time": None, "comments": []}
+

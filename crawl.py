@@ -21,11 +21,26 @@ results_lock = Lock()
 
 def save_progress(data):
     """save data regularly"""
-    with tempfile.NamedTemporaryFile('w', delete=False, encoding='utf-8') as temp_file:
-        json.dump(data, temp_file, ensure_ascii=False, indent=4)
-        temp_file.flush()
-        shutil.move(temp_file.name, 'all_posts_comments_progress.json')
+    try: 
+        temp_file_path = None
+        with tempfile.NamedTemporaryFile('w', delete=False, encoding='utf-8') as temp_file:
+            temp_file_path = temp_file.name
+    
+            json.dump(data, temp_file, ensure_ascii=False, indent=4)
+            temp_file.flush()
+            
+        time.sleep(0.1)
 
+        if temp_file_path:
+            try:
+                if os.path.exists('all_posts_comments_progress.json'):
+                    os.remove('all_posts_comments_progress.json')
+                shutil.move(temp_file_path, 'all_posts_comments_progress.json')
+            except Exception as e:
+                print(f"Error moving temporary file: {str(e)}")
+                print(f"Data saved in temporary file: {temp_file_path}")
+    except Exception as e:
+        print(f"Error in save_progress: {str(e)}")
 def crawl(driver, url, username, password, threshold, ite):
 
     all_posts_comments = {}
@@ -41,7 +56,6 @@ def crawl(driver, url, username, password, threshold, ite):
         retry_count = 0
         max_retries = 3
         all_links = None
-
 
         while retry_count < max_retries:
             try:
@@ -100,17 +114,18 @@ def crawl(driver, url, username, password, threshold, ite):
             
             for timestamp, link in chunk:
                 try:
-                    print(f"Driver {driver_index + 1} processing: {link}")
+                    print(f"Driver {driver_index + 1} processing ... ")
                     time.sleep(random.uniform(1, 3))
                     
                     current_driver.get(link)
-                    article_info = cf.get_filtered_links_with_info_profile_comment(current_driver)
+                    article_info = cf.get_article_data(current_driver)
 
                     thread_results[timestamp] = {
                             "link": link,
                             "author": article_info.get("author"),
                             "content": article_info.get("content"),
                             "post_time": article_info.get("post_time"),
+                            "file_links": article_info.get("file_links"),
                             "comments": article_info.get("comments")
                     }
                           
@@ -134,7 +149,7 @@ def crawl(driver, url, username, password, threshold, ite):
         threads = []
 
         for i, chunk in enumerate(link_chunks):
-            if i < len(driver_pool):  # Ensure there are enough drivers
+            if i < len(driver_pool):  
                 thread = threading.Thread(
                     target=lambda c, di: process_chunk(c, di),
                     args=(chunk, i)
@@ -154,14 +169,12 @@ def crawl(driver, url, username, password, threshold, ite):
             except Exception as e:
                 print(f"Error closing driver: {str(e)}")
 
-        # 儲存最終結果
         save_progress(all_posts_comments)
         print("Crawling completed")
         return all_posts_comments
     
     except Exception as e:
         print(f"Fatal error occurred: {str(e)}")
-        # 確保清理所有資源
         try:
             for d in driver_pool:
                 d.quit()
@@ -170,7 +183,6 @@ def crawl(driver, url, username, password, threshold, ite):
         return []
 
 if __name__ == '__main__':
-
     cnt = 0
     threshold = 60 #Base on the Internet speed (300 - 400)
     ite = 20 # Use to check whether it reaches the end of the page (Should be 20 - 30)

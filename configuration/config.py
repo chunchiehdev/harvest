@@ -4,6 +4,8 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
 from selenium.webdriver.common.by import By
 import time
 import random
@@ -47,21 +49,18 @@ def configure_driver():
     '''Configure the webdriver'''
 
     # Configurations
-    webdriver_path = path_mac 
     chrome_options = Options()
 
     # Turn off Chrome notification and set language to English
     chrome_options.add_argument("--disable-notifications")
+    chrome_options.add_argument("--headless")  
+    chrome_options.add_argument("--no-sandbox")
     chrome_options.add_experimental_option('prefs', {'intl.accept_languages': 'en,en_US'})
 
-    # Start the service
-    service = Service(webdriver_path)
-
-    # Start the driver
+    service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
-    
-    return driver
 
+    return driver
 
 def set_up_driver(url, service):
     '''Set up the driver and get url'''
