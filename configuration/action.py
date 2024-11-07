@@ -17,7 +17,6 @@ def get_url():
     return url
 
 def convert_to_timestamp(time_str):
-
     is_pm = '下午' in time_str
 
     time_str = time_str.replace('上午', '').replace('下午', '')
@@ -36,19 +35,17 @@ def convert_to_timestamp(time_str):
     return timestamp
 
 def get_comments_by_id(soup):
-
     comments = soup.find_all('div', id=lambda x: x and x.isdigit())
     
     if not comments:
-        print("No comments found. HTML content:")  # 印出部分HTML以便偵錯
+        print("No comments found.") 
         return [], []
     
     results = []
-    comment_ids = []  # 新增一個用來儲存 ID 的列表
-
+    comment_ids = []  
 
     for comment in comments:
-        comment_id = comment.get('id')  # 獲取每個評論的唯一ID
+        comment_id = comment.get('id')  
         if comment_id:
             comment_ids.append(comment_id)
         author = comment.find('h3').find('a').text if comment.find('h3') else "Unknown Author"
@@ -62,22 +59,21 @@ def get_comments_by_id(soup):
 
 def load_all_comments(driver, timeout=10, max_retries=3):
     all_comments = []
-    seen_ids = set()  # 使用集合來存儲已處理過的留言內容
-
+    seen_ids = set()  
 
     while True:
-        # 確保頁面完全載入
+        
         WebDriverWait(driver, timeout).until(
             lambda d: d.execute_script("return document.readyState") == "complete"
         )
         
-        # 獲取當前頁面的留言
+        
         html_content = driver.page_source
         soup = BeautifulSoup(html_content, 'html.parser')
         comments, comment_ids = get_comments_by_id(soup)
 
         for comment, comment_id in zip(comments, comment_ids):
-            if comment_id and comment_id not in seen_ids:  # 檢查ID是否已處理
+            if comment_id and comment_id not in seen_ids:  
                 all_comments.append(comment)
                 seen_ids.add(comment_id)
 
@@ -85,7 +81,6 @@ def load_all_comments(driver, timeout=10, max_retries=3):
         while retries < max_retries:
             try:
 
-                # 等待"查看更多留言"按鈕出現
                 see_more_div = WebDriverWait(driver, timeout).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "div[id^='see_next_']"))
                 )
@@ -97,8 +92,6 @@ def load_all_comments(driver, timeout=10, max_retries=3):
                 time.sleep(2)
                 print("click and look for more comment...")
                 
-                # 驗證新內容已載入
-
                 new_html = driver.page_source
                 new_soup = BeautifulSoup(new_html, 'html.parser')
                 new_comments, new_comment_ids = get_comments_by_id(new_soup)
@@ -107,7 +100,7 @@ def load_all_comments(driver, timeout=10, max_retries=3):
                     break
 
                 for comment, comment_id in zip(new_comments, new_comment_ids):
-                    if comment_id and comment_id not in seen_ids:  # 檢查ID是否已處理
+                    if comment_id and comment_id not in seen_ids:  
                         all_comments.append(comment)
                         seen_ids.add(comment_id)
 
@@ -132,7 +125,6 @@ def load_all_comments(driver, timeout=10, max_retries=3):
             print(f"Max retrues. ({max_retries}), Stop load")
             break
 
-        # 確認是否還有更多留言按鈕
         try:
             WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "div[id^='see_next_'] a"))

@@ -10,4 +10,6 @@ chromedriver.exe
 
 testing.py
 
-all_posts_comments_progress.json
+posts_comments.json
+links_progress.json
+post_progress.json

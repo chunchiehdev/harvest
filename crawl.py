@@ -8,6 +8,8 @@ from threading import Lock
 import tempfile
 import shutil
 import random
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 
 load_dotenv()
 fb_user = os.getenv('user')
@@ -33,19 +35,59 @@ def save_progress(data):
 
         if temp_file_path:
             try:
-                if os.path.exists('all_posts_comments_progress.json'):
-                    os.remove('all_posts_comments_progress.json')
-                shutil.move(temp_file_path, 'all_posts_comments_progress.json')
+                if os.path.exists('posts_comments.json'):
+                    os.remove('posts_comments.json')
+                shutil.move(temp_file_path, 'posts_comments.json')
             except Exception as e:
                 print(f"Error moving temporary file: {str(e)}")
                 print(f"Data saved in temporary file: {temp_file_path}")
     except Exception as e:
         print(f"Error in save_progress: {str(e)}")
-def crawl(driver, url, username, password, threshold, ite):
+
+def process_chunk(chunk, driver, all_posts_comments):
+    """Process a chunk of links with the given driver"""
+    for timestamp, link in chunk:
+        try:
+            print(f"Processing link {link} at {timestamp}...")
+            time.sleep(random.uniform(1, 3))
+            
+            driver.get(link)
+            article_info = cf.get_article_data(driver)
+            
+            result = {
+                "link": link,
+                "author": article_info.get("author"),
+                "content": article_info.get("content"),
+                "post_time": article_info.get("post_time"),
+                "file_links": article_info.get("file_links"),
+                "comments": article_info.get("comments")
+            }
+
+            with results_lock:
+                # Check if this timestamp already exists to prevent duplicates
+                if timestamp not in all_posts_comments:
+                    all_posts_comments[timestamp] = result
+                else:
+                    print(f"Duplicate timestamp {timestamp} found, skipping.")
+                    
+                # Save progress every 10 posts
+                if len(all_posts_comments) % 10 == 0:
+                    save_progress(all_posts_comments)
+                    print(f"Progress saved: {len(all_posts_comments)} posts processed")
+
+        except Exception as e:
+            print(f"Error processing {link}: {str(e)}")
+
+
+def crawl(url, username, password, threshold, ite):
 
     all_posts_comments = {}
+    drivers = []  
 
     try:
+        driver = cf.configure_driver()
+        drivers.append(driver)
+
         driver.get(url)
         # Login Facebook
         if not cf.login_facebook(username, password, driver):
@@ -77,126 +119,132 @@ def crawl(driver, url, username, password, threshold, ite):
         with open('post_links.json', 'w', encoding='utf-8') as f:
             json.dump(all_links, f, ensure_ascii=False, indent=4)
         
-        driver_pool = []
-        max_workers = min(3, os.cpu_count() * 2)
-
-        print(f"Initializing {max_workers} drivers...")
-
-        for i in range(max_workers):
-            try:
-                new_driver = cf.configure_driver()
-                new_driver.get(url)
-
-                if not cf.login_facebook(username, password, new_driver):
-                    print(f"Login failed for driver { i+1 }")
-                    new_driver.quit()
-                    continue
-                print(f"Driver {i+1} logged in successfully")
-                driver_pool.append(new_driver)
-            except Exception as e:
-                print(f"Failed to initialize driver {i+1}: {str(e)}")
-                if new_driver:
-                    new_driver.quit()
-
-        if not driver_pool:
-            print("No drivers successfully initialized")
-            return None
-
+        # driver_pool = []
+        # max_workers = min(3, os.cpu_count() * 2)
         links_list = list(all_links.items())
-        chunk_size = len(links_list) // len(driver_pool) + (1 if len(links_list) % len(driver_pool) else 0)
+        num_threads  = 2 
+        chunk_size = len(links_list) // num_threads + (1 if len(links_list) % num_threads else 0)
         link_chunks = [links_list[i:i + chunk_size] for i in range(0, len(links_list), chunk_size)]
-        print(f"Divided {len(links_list)} links into {len(link_chunks)} chunks")
+        
+        # print(f"Initializing {max_workers} drivers...")
 
-        def process_chunk(chunk, driver_index):
-            """handing a set of links"""
-            current_driver = driver_pool[driver_index]
-            thread_results = {}
+        # for i in range(max_workers):
+        #     try:
+        #         new_driver = cf.configure_driver()
+        #         new_driver.get(url)
+
+        #         if not cf.login_facebook(username, password, new_driver):
+        #             print(f"Login failed for driver { i+1 }")
+        #             new_driver.quit()
+        #             continue
+        #         print(f"Driver {i+1} logged in successfully")
+        #         driver_pool.append(new_driver)
+        #     except Exception as e:
+        #         print(f"Failed to initialize driver {i+1}: {str(e)}")
+        #         if new_driver:
+        #             new_driver.quit()
+
+        # if not driver_pool:
+        #     print("No drivers successfully initialized")
+        #     return None
+
+        # links_list = list(all_links.items())
+        # chunk_size = len(links_list) // len(driver_pool) + (1 if len(links_list) % len(driver_pool) else 0)
+        # link_chunks = [links_list[i:i + chunk_size] for i in range(0, len(links_list), chunk_size)]
+        # print(f"Divided {len(links_list)} links into {len(link_chunks)} chunks")
+
+        # def process_chunk(chunk, driver_index):
+        #     """handing a set of links"""
+        #     current_driver = driver_pool[driver_index]
+        #     thread_results = {}
             
-            for timestamp, link in chunk:
-                try:
-                    print(f"Driver {driver_index + 1} processing ... ")
-                    time.sleep(random.uniform(1, 3))
+        #     for timestamp, link in chunk:
+        #         try:
+        #             print(f"Driver {driver_index + 1} processing ... ")
+        #             time.sleep(random.uniform(1, 3))
                     
-                    current_driver.get(link)
-                    article_info = cf.get_article_data(current_driver)
+        #             current_driver.get(link)
+        #             article_info = cf.get_article_data(current_driver)
 
-                    thread_results[timestamp] = {
-                            "link": link,
-                            "author": article_info.get("author"),
-                            "content": article_info.get("content"),
-                            "post_time": article_info.get("post_time"),
-                            "file_links": article_info.get("file_links"),
-                            "comments": article_info.get("comments")
-                    }
+        #             thread_results[timestamp] = {
+        #                     "link": link,
+        #                     "author": article_info.get("author"),
+        #                     "content": article_info.get("content"),
+        #                     "post_time": article_info.get("post_time"),
+        #                     "file_links": article_info.get("file_links"),
+        #                     "comments": article_info.get("comments")
+        #             }
                           
-                except Exception as e:
-                    print(f"Error processing {link}: {str(e)}")
+        #         except Exception as e:
+        #             print(f"Error processing {link}: {str(e)}")
             
-            with results_lock:
-                for timestamp, data in thread_results.items():
-                    # Check if this timestamp already exists to prevent duplicates
-                    if timestamp not in all_posts_comments:
-                        all_posts_comments[timestamp] = data
-                    else:
-                        print(f"Duplicate timestamp {timestamp} found, skipping.")
-                if len(all_posts_comments) % 10 == 0:
-                    save_progress(all_posts_comments)
-                    print(f"Progress saved: {len(all_posts_comments)} posts processed")
+        #     with results_lock:
+        #         for timestamp, data in thread_results.items():
+        #             # Check if this timestamp already exists to prevent duplicates
+        #             if timestamp not in all_posts_comments:
+        #                 all_posts_comments[timestamp] = data
+        #             else:
+        #                 print(f"Duplicate timestamp {timestamp} found, skipping.")
+        #         if len(all_posts_comments) % 10 == 0:
+        #             save_progress(all_posts_comments)
+        #             print(f"Progress saved: {len(all_posts_comments)} posts processed")
 
 
-            return thread_results
+        #     return thread_results
 
-        threads = []
+        # threads = []
 
-        for i, chunk in enumerate(link_chunks):
-            if i < len(driver_pool):  
-                thread = threading.Thread(
-                    target=lambda c, di: process_chunk(c, di),
-                    args=(chunk, i)
-                )
-                threads.append(thread)
-                thread.start()
-                print(f"Started thread {i+1} with {len(chunk)} links")
+        # for i, chunk in enumerate(link_chunks):
+        #     if i < len(driver_pool):  
+        #         thread = threading.Thread(
+        #             target=lambda c, di: process_chunk(c, di),
+        #             args=(chunk, i)
+        #         )
+        #         threads.append(thread)
+        #         thread.start()
+        #         print(f"Started thread {i+1} with {len(chunk)} links")
 
-        for i, thread in enumerate(threads):
-            thread.join()
-            print(f"Thread {i+1} completed")
+        # for i, thread in enumerate(threads):
+        #     thread.join()
+        #     print(f"Thread {i+1} completed")
 
-        print("Cleaning up drivers...")
-        for d in driver_pool:
-            try:
-                d.quit()
-            except Exception as e:
-                print(f"Error closing driver: {str(e)}")
+        # print("Cleaning up drivers...")
+        # for d in driver_pool:
+        #     try:
+        #         d.quit()
+        #     except Exception as e:
+        #         print(f"Error closing driver: {str(e)}")
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            drivers = [cf.configure_driver() for _ in range(num_threads)]
+            futures = [
+                executor.submit(process_chunk, link_chunks[i], drivers[i], all_posts_comments)
+                for i in range(num_threads)
+            ]
 
+            # 等待所有執行緒完成
+            for future in futures:
+                future.result()
         save_progress(all_posts_comments)
         print("Crawling completed")
         return all_posts_comments
     
     except Exception as e:
         print(f"Fatal error occurred: {str(e)}")
-        try:
-            for d in driver_pool:
-                d.quit()
-        except:
-            pass
         return []
+    finally:
+        # 確保所有 driver 都被正確關閉
+        for driver in drivers:
+            driver.quit()
 
 if __name__ == '__main__':
-    cnt = 0
     threshold = 60 #Base on the Internet speed (300 - 400)
     ite = 20 # Use to check whether it reaches the end of the page (Should be 20 - 30)
 
     # Login info
-    username = fb_user #your fb username
-    password = fb_password #your fb password
+    username = fb_user 
+    password = fb_password 
 
     url = cf.get_url()
-    driver = cf.configure_driver()
-    # starter = 0
-    # limit = 10
 
-    crawl(driver, url, username, password, threshold, ite)
+    crawl(url, username, password, threshold, ite)
   
-    time.sleep(30)
-    driver.quit()
