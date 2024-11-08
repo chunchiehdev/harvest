@@ -17,4 +17,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+ENTRYPOINT ["watchmedo", "auto-restart", "--directory=/app", "--pattern=*.py", "--ignore-patterns=*.pyc,__pycache__/*", "--recursive"]
 CMD ["python", "crawl.py"]

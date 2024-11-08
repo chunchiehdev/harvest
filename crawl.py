@@ -5,9 +5,8 @@ import time
 import json
 import tempfile
 import shutil
-import random
 from concurrent.futures import ThreadPoolExecutor
-from threading import Lock
+from threading import Lock, Thread
 
 load_dotenv()
 fb_user = os.getenv('user')
@@ -41,6 +40,10 @@ def save_progress(data):
     except Exception as e:
         print(f"Error in save_progress: {str(e)}")
 
+def save_progress_async(data):
+    """Start asynchronous saving of progress data."""
+    Thread(target=save_progress, args=(data,)).start()
+
 def init_driver_and_login():
     """Initialize a WebDriver instance and log in to Facebook"""
     driver = cf.configure_driver()
@@ -54,14 +57,15 @@ def init_driver_and_login():
 
 def process_links(links, driver, all_posts_comments):
     """Process a list of links with a single driver"""
+    local_results = {}
+
     for timestamp, link in links:
         try:
             print(f"Processing link {link} at {timestamp}...")
-            time.sleep(random.uniform(1, 3))
             driver.get(link)
             article_info = cf.get_article_data(driver)
 
-            result = {
+            local_results[timestamp] = {
                 "link": link,
                 "author": article_info.get("author"),
                 "content": article_info.get("content"),
@@ -70,16 +74,15 @@ def process_links(links, driver, all_posts_comments):
                 "comments": article_info.get("comments")
             }
 
-            with results_lock:
-                if timestamp not in all_posts_comments:
-                    all_posts_comments[timestamp] = result
-                    # Save progress every 10 posts
-                    if len(all_posts_comments) % 10 == 0:
-                        save_progress(all_posts_comments)
-                        print(f"Progress saved: {len(all_posts_comments)} posts processed")
-
         except Exception as e:
             print(f"Error processing {link}: {str(e)}")
+    # Update the global dictionary once per batch to minimize lock contention
+    with results_lock:
+        all_posts_comments.update(local_results)
+
+    # Save progress asynchronously every 50 entries to reduce I/O overhead
+    if len(all_posts_comments) % 50 == 0:
+        save_progress_async(all_posts_comments)
 
 def crawl(url, num_threads=3):
     """Main crawl function to process all links using multiple threads"""
@@ -140,7 +143,12 @@ def crawl(url, num_threads=3):
 
 if __name__ == '__main__':
     # Set parameters
+    start_time = time.time()
+
     url = cf.get_url()
-    num_threads = 2  # Set the number of threads (and drivers)
+    num_threads = 4  # Set the number of threads (and drivers)
 
     crawl(url, num_threads)
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"Total execution time: {elapsed_time:.2f} seconds")
