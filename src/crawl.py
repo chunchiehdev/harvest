@@ -20,8 +20,9 @@ results_lock = Lock()
 
 def save_progress(data):
     """save data regularly"""
-    try:
+    try:        
         temp_file_path = None
+
         with tempfile.NamedTemporaryFile('w', delete=False, encoding='utf-8') as temp_file:
             temp_file_path = temp_file.name
             json.dump(data, temp_file, ensure_ascii=False, indent=4)
@@ -31,9 +32,9 @@ def save_progress(data):
 
         if temp_file_path:
             try:
-                if os.path.exists('posts_comments.json'):
-                    os.remove('posts_comments.json')
-                shutil.move(temp_file_path, 'posts_comments.json')
+                if os.path.exists(cf.POSTS_COMMENTS_PATH):
+                    os.remove(cf.POSTS_COMMENTS_PATH)
+                shutil.move(temp_file_path, cf.POSTS_COMMENTS_PATH)
             except Exception as e:
                 print(f"Error moving temporary file: {str(e)}")
                 print(f"Data saved in temporary file: {temp_file_path}")
@@ -142,6 +143,7 @@ def crawl(url, num_threads=3):
     return all_posts_comments
 
 if __name__ == '__main__':
+    print("start ...")
     # Set parameters
     start_time = time.time()
 

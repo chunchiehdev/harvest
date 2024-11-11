@@ -17,6 +17,11 @@ load_dotenv()
 path_mac = os.getenv('driver_path_mac')
 path_windows = os.getenv('driver_path_win')
 
+
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+LINKS_PROGRESS_PATH = os.path.join(ROOT_DIR, 'links_progress.json')
+POSTS_COMMENTS_PATH = os.path.join(ROOT_DIR, 'posts_comments.json')
+
 def type_like_human(element, text):
     for char in text:
         element.send_keys(char)

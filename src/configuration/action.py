@@ -4,10 +4,10 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
 from bs4 import BeautifulSoup
+from configuration.config import LINKS_PROGRESS_PATH
 import json
 from datetime import datetime
 import time
-
 
 def get_url():
     '''Get the URL of a Facebook post from the user input'''
@@ -246,7 +246,7 @@ def get_all_posts_links(driver):
             return None
     
     def save_progress():
-        with open('links_progress.json', 'w', encoding='utf-8') as f:
+        with open(LINKS_PROGRESS_PATH, 'w', encoding='utf-8') as f:
             json.dump(all_links, f, ensure_ascii=False, indent=4)
 
     retry_count = 0
