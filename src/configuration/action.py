@@ -8,6 +8,17 @@ from configuration.config import LINKS_PROGRESS_PATH
 import json
 from datetime import datetime
 import time
+from urllib.parse import urlparse, parse_qs, unquote
+import requests
+import os
+from pdf2image import convert_from_path, pdfinfo_from_path
+from pytesseract import pytesseract
+import gc
+from PIL import Image
+from tqdm import tqdm
+from multiprocessing import Pool
+from collections import OrderedDict
+import re
 
 def get_url():
     '''Get the URL of a Facebook post from the user input'''
@@ -390,3 +401,201 @@ def get_article_data(driver, timeout=10):
         print(f"Error getting article data: {str(e)}")
         return {"author": None, "content": None, "post_time": None, "comments": []}
 
+def extract_actual_url(facebook_url):
+    """
+    從 Facebook 轉址連結中提取真實的 PDF 檔案連結
+    """
+    parsed_url = urlparse(facebook_url)
+    query_params = parse_qs(parsed_url.query)
+
+    if 'u' in query_params:
+        actual_url = unquote(query_params['u'][0])  
+        return actual_url
+    return None  
+
+def is_pdf_url(url):
+    """
+    檢查連結是否指向 PDF 檔案
+    """
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+    }
+    
+    try:
+        response = requests.head(url, headers=headers, allow_redirects=True)
+        content_type = response.headers.get('Content-Type', '')
+        return content_type == 'application/pdf'
+    except requests.RequestException as e:
+        print(f"檢查失敗: {e}")
+        return False
+
+def download_pdf(url, save_path, chunk_size=8192):
+    """
+    分塊下載 PDF 文件到本地
+    """
+    try:
+        response = requests.get(url, stream=True, timeout=10)
+        response.raise_for_status()  # 檢查 HTTP 狀態碼是否正常
+        total_size = int(response.headers.get('Content-Length', 0))  # 文件大小
+
+        with open(save_path, 'wb') as f, tqdm(
+            desc=f"Downloading {save_path}",
+            total=total_size,
+            unit='B',
+            unit_scale=True,
+            unit_divisor=1024,
+        ) as bar:
+            for chunk in response.iter_content(chunk_size=chunk_size):
+                if chunk:
+                    f.write(chunk)
+                    bar.update(len(chunk))
+        print(f"PDF 下載完成: {save_path}")
+        return True
+    except requests.exceptions.RequestException as e:
+        print(f"下載失敗: {url}, 原因: {e}")
+        return False
+
+def process_page(args):
+    pdf_path, page_num, output_folder = args
+    
+    images = convert_from_path(
+        pdf_path,
+        first_page=page_num,
+        last_page=page_num
+    )
+    
+    image_path = os.path.join(output_folder, f"page_{page_num}.jpg")
+    images[0].save(image_path, 'JPEG')
+    return image_path
+
+def pdf_to_image(pdf_path, output_folder):
+    """
+    分批將 PDF 轉換為圖片，減少記憶體使用
+    """
+    try:
+        os.makedirs(output_folder, exist_ok=True)
+        
+        info = pdfinfo_from_path(pdf_path)
+        maxPages = info["Pages"]
+
+        # 準備參數
+        args = [(pdf_path, page_num, output_folder) 
+                for page_num in range(1, maxPages + 1)]
+        
+        results_dict = OrderedDict()
+        with Pool(processes=4) as pool:
+            for i, path in enumerate(pool.imap(process_page, args), 1):
+                if path:
+                    results_dict[i] = path
+                    print(f"PDF 頁面 {i} 已轉換: {path}")
+        
+        for page_num in range(1, maxPages + 1):
+            if page_num not in results_dict:
+                print(f"警告：第 {page_num} 頁處理失敗")
+                
+        return list(results_dict.values())
+            
+    except Exception as e:
+        print(f"PDF 轉換圖片時發生錯誤: {e}")
+        raise
+
+def ocr_image(image_path, lang='eng'):
+    """
+    使用 OCR 從圖片中提取文字
+    """
+    try:
+        # 開啟圖片並進行 OCR
+        with Image.open(image_path) as img:
+            text = pytesseract.image_to_string(img, lang=lang)
+        return text
+    except Exception as e:
+        print(f"處理圖片 {image_path} 時發生錯誤: {e}")
+        return None
+
+def natural_sort_key(file_name):
+    """
+    提取檔名中的數字部分進行排序
+    """
+    return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', file_name)]
+
+
+def images_to_texts(image_folder, output_file, lang='eng'):
+    """
+    將資料夾中的圖片進行 OCR 並保存文字結果
+    """
+    try:
+        all_texts = []
+        results = {}
+        image_files = [
+            f for f in os.listdir(image_folder) 
+            if f.lower().endswith(('.png', '.jpg', '.jpeg'))
+        ]
+        image_files.sort(key=natural_sort_key)
+
+        for image_file in image_files:
+            image_path = os.path.join(image_folder, image_file)
+            print(f"正在處理圖片: {image_path}")
+            
+            # 提取文字
+            text = ocr_image(image_path, lang=lang)
+            if text is not None:
+                all_texts.append(f"--- {image_file} ---\n{text.strip()}\n")
+            else:
+                all_texts.append(f"--- {image_file} ---\nOCR 失敗或無法提取文字\n")
+        # 將所有提取結果寫入單一 txt 文件
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write("\n".join(all_texts))
+        
+        print(f"OCR 處理完成，結果已保存至 {output_file}")
+    except Exception as e:
+        print(f"批量處理圖片時發生錯誤: {e}")
+        raise
+
+def process_pdf_file(file_id, pdf_url):
+    """
+    處理單個 PDF 文件的完整流程
+    """
+    try:
+        # 建立必要的目錄
+        pdf_folder = "downloaded_pdfs"
+        image_folder = f"pdf_images/{file_id}"
+        ocr_output_folder = "ocr_output"
+
+        for folder in [pdf_folder, ocr_output_folder]:
+            os.makedirs(folder, exist_ok=True)
+        os.makedirs(image_folder, exist_ok=True)
+
+        pdf_path = f"{pdf_folder}/{file_id}.pdf"
+
+        # 下載 PDF
+        if not download_pdf(pdf_url, pdf_path):
+            return False
+
+        # PDF 轉圖片
+        try:
+            pdf_to_image(pdf_path, image_folder)
+        except Exception as e:
+            print(f"PDF 轉圖片失敗 (ID: {file_id}): {e}")
+            return False
+        finally:
+            # 轉換完成後刪除 PDF
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+
+        # OCR 提取文字
+        output_text_file = f"{ocr_output_folder}/{file_id}_extracted_text.txt"
+        try:
+            images_to_texts(image_folder, output_text_file)
+        except Exception as e:
+            print(f"OCR 提取失敗 (ID: {file_id}): {e}")
+            return False
+        
+        return True
+
+    except Exception as e:
+        print(f"處理文件 ID {file_id} 時發生錯誤: {e}")
+        return False
+
+    finally:
+        # 強制釋放資源
+        gc.collect()

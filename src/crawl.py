@@ -7,6 +7,9 @@ import tempfile
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock, Thread
+import database as db
+import gc
+
 
 load_dotenv()
 fb_user = os.getenv('user')
@@ -136,10 +139,28 @@ def crawl(url, num_threads=3):
     save_progress(all_posts_comments)
     print("Crawling completed")
 
+    if all_posts_comments:
+        try:
+            print("saving to postgresql")
+            db.save_to_database(all_posts_comments)
+            print("Successfully saved data to database")
+        except Exception as e:
+            print(f"Error saving to database: {str(e)}")
+
     # Clean up all drivers
     for driver in drivers:
         driver.quit()
 
+    valid_pdf_links = db.get_valid_pdf_links()
+
+    # for file_id, pdf_url in valid_pdf_links:
+    #     print(f"處理文件 ID: {file_id}, 連結: {pdf_url}")
+    #     if cf.process_pdf_file(file_id, pdf_url):
+    #         print(f"文件 ID {file_id} 處理完成")
+    #     else:
+    #         print(f"文件 ID {file_id} 處理失敗")
+    #         gc.collect()
+    
     return all_posts_comments
 
 if __name__ == '__main__':

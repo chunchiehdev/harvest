@@ -14,3 +14,6 @@ testing.py
 posts_comments.json
 links_progress.json
 post_progress.json
+
+pdf_images/
+ocr_output/
