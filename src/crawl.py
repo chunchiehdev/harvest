@@ -7,10 +7,8 @@ import tempfile
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock, Thread
-import database as db
-import gc
-
-
+import db as db
+from core.config import settings
 load_dotenv()
 fb_user = os.getenv('user')
 fb_password = os.getenv('password')
@@ -35,9 +33,9 @@ def save_progress(data):
 
         if temp_file_path:
             try:
-                if os.path.exists(cf.POSTS_COMMENTS_PATH):
-                    os.remove(cf.POSTS_COMMENTS_PATH)
-                shutil.move(temp_file_path, cf.POSTS_COMMENTS_PATH)
+                if os.path.exists(settings.POSTS_COMMENTS_PATH):
+                    os.remove(settings.POSTS_COMMENTS_PATH)
+                shutil.move(temp_file_path, settings.POSTS_COMMENTS_PATH)
             except Exception as e:
                 print(f"Error moving temporary file: {str(e)}")
                 print(f"Data saved in temporary file: {temp_file_path}")

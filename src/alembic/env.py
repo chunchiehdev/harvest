@@ -9,14 +9,13 @@ from pathlib import Path
 import sys
 
 # add `src` to sys.path
-src_path = str(Path(__file__).resolve().parents[2] / "src")
-if src_path not in sys.path:
-    sys.path.append(src_path)
-print("sys.path:", sys.path)
-
+# src_path = str(Path(__file__).resolve().parents[2] / "src")
+# if src_path not in sys.path:
+#     sys.path.append(src_path)
+# print("sys.path:", sys.path)
 
 # and then import
-from src.database.models import Base
+from db.session import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

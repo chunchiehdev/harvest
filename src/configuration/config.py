@@ -5,22 +5,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-
 from selenium.webdriver.common.by import By
 import time
 import random
-import os
-from dotenv import load_dotenv
-
-
-load_dotenv()
-path_mac = os.getenv('driver_path_mac')
-path_windows = os.getenv('driver_path_win')
-
-
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-LINKS_PROGRESS_PATH = os.path.join(ROOT_DIR, 'links_progress.json')
-POSTS_COMMENTS_PATH = os.path.join(ROOT_DIR, 'posts_comments.json')
 
 def type_like_human(element, text):
     for char in text:

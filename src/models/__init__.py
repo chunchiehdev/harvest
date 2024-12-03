@@ -1,0 +1,1 @@
+from .post_models import Base, Post, File, Comment
