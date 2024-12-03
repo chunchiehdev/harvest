@@ -1,15 +1,36 @@
-.venv
+# Python
+*.py[cod]
+*.pyo
+*.pyc
+*.pyd
+__pycache__/
+*.egg-info/
+dist/
+build/
+*.egg
+*.log
+*.sql
+*.sqlite
+*.db
+
+# Environment files
 venv/
-__pycache__
-
-
 .env
+
+# Alembic files
+alembic.ini
+alembic/versions/*
 
 chromedriver.exe
 
-*.pyc
-
-testing.py
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 posts_comments.json
 links_progress.json
